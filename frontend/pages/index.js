@@ -17,53 +17,79 @@ export default function Home() {
   const connectWallet = async () => {
     const web3Modal = new Web3Modal();
     const connection = await web3Modal.connect();
-    const provider = new ethers.providers.Web3Provider(connection);
-    const signer = provider.getSigner();
+    const provider = new ethers.BrowserProvider(connection);
+    const signer = await provider.getSigner();
     return signer;
   };
 
   const fetchTasks = async () => {
-    const provider = new ethers.providers.JsonRpcProvider("https://rpc-amoy.polygon.technology");
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, BlockTask.abi, provider);
-    const taskCount = await contract.taskCount();
-    const tasks = [];
-    for (let i = 0; i < taskCount; i++) {
-      const task = await contract.tasks(i);
-      tasks.push(task);
+    setLoading(true);
+    try {
+      const provider = new ethers.JsonRpcProvider("https://rpc-amoy.polygon.technology");
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, BlockTask.abi, provider);
+      const taskCount = await contract.taskCount();
+      const tasks = [];
+      for (let i = 0; i < taskCount; i++) {
+        const task = await contract.tasks(i);
+        tasks.push(task);
+      }
+      setTasks(tasks);
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+    } finally {
+      setLoading(false);
     }
-    setTasks(tasks);
   };
 
   const addTask = async () => {
-    const signer = await connectWallet();
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, BlockTask.abi, signer);
-    const tx = await contract.addTask("New Task");
-    await tx.wait();
-    fetchTasks();
+    if (!newTask) return;
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, BlockTask.abi, signer);
+      const tx = await contract.addTask(newTask);
+      await tx.wait();
+      setNewTask("");
+      fetchTasks();
+    } catch (error) {
+      console.error("Error adding task:", error);
+    }
   };
 
   const handleWalletConnection = async (signer) => {
     setWalletConnected(true);
     const contract = new ethers.Contract(CONTRACT_ADDRESS, BlockTask.abi, signer);
     const balance = await signer.getBalance();
-    const tokenBalance = ethers.utils.formatEther(balance);
+    const tokenBalance = ethers.formatEther(balance);
     setTokenBalance(tokenBalance);
   };
 
   const completeTask = async (taskId) => {
-    const signer = await connectWallet();
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, BlockTask.abi, signer);
-    const tx = await contract.completeTask(taskId);
-    await tx.wait();
-    fetchTasks();
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, BlockTask.abi, signer);
+      const tx = await contract.completeTask(taskId);
+      await tx.wait();
+      fetchTasks();
+    } catch (error) {
+      console.error("Error completing task:", error);
+    }
   };
 
   const deleteTask = async (taskId) => {
-    const signer = await connectWallet();
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, BlockTask.abi, signer);
-    const tx = await contract.deleteTask(taskId);
-    await tx.wait();
-    fetchTasks();
+    if (window.confirm("Are you sure you want to delete this task?")) {
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, BlockTask.abi, signer);
+        const tx = await contract.deleteTask(taskId);
+        await tx.wait();
+        fetchTasks();
+      } catch (error) {
+        console.error("Error deleting task:", error);
+      }
+    }
   };
 
   return (
